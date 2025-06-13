@@ -1,0 +1,61 @@
+package: Package?
+dependencies: Dependencies?
+features: any?
+workspace: Workspace?
+profile: {
+    *: Profile
+}
+*: any
+
+type Package {
+    name: string
+    version: string
+    edition: Edition
+    description: string
+    authors: [string]?
+    license: string?
+    repository: string?
+    readme: string?
+    keywords: [string]?
+    categories: [string]?
+    homepage: string?
+    documentation: string?
+}
+
+type Dependencies {
+    *: string | Dependency
+}
+
+enum Edition { "2015", "2018", "2021", "2024" }
+
+type Dependency {
+    version: string?
+    path: string?
+    git: string?
+    branch: string?
+    tag: string?
+    package: string?
+    features: [string]?
+    default_features: bool?
+    optional: bool?
+}
+
+type Workspace {
+    members: [string]
+    resolver: Resolver?
+    exclude: [string]?
+}
+
+enum Resolver { "2", "3" }
+
+type Profile {
+    opt-level: int
+    lto: string | bool
+    codegen-units: int
+    panic: PanicMode
+}
+
+enum PanicMode {
+    "abort"
+    "unwind"
+}
