@@ -1,61 +1,312 @@
-package: Package?
-dependencies: Dependencies?
-features: any?
+// # Cargo.toml TYML Schema (Cargo 1.79 — 2025 -06 -13)
+//
+// This schema adds **static typing + rich hover -docs** to every key allowed in a
+// stable Cargo 1.79 manifest. Open a `.toml` with `# !tyml cargo.tyml` and your IDE
+// will surface these comments on completion or via `tyml lint --explain`.
+//
+// For each element we try to answer:
+// 1. **What does it do?**
+// 2. **Accepted values / format**
+// 3. **Interaction with Cargo commands & common caveats**
+//
+// Sources: *The Cargo Book* (1.79), *cargo reference* docs, and rustc book.
+
+// --------------------------------------------------------------------------- //
+// Root tables & global keys                                                   //
+// --------------------------------------------------------------------------- //
+
+/// Unstable feature flags (nightly -only). **Do not publish** crates using them.
+///
+/// ```toml
+/// cargo-features = ["edition2024"]
+/// ```
+cargo-features: [string]?
+
+/// Main package metadata — **mandatory for every first -party crate**.
+package:         Package?
+
+/// Explicit target tables override auto -discovery (e.g. `src/lib.rs`).
+lib:     CommonTarget?
+/// Executable binaries (order matters for default `cargo run`).
+bin:     [CommonTarget]?
+/// Example programs built with `--examples`.
+example: [CommonTarget]?
+/// Test targets compiled by `cargo test`.
+test:    [CommonTarget]?
+/// Benchmarks compiled by `cargo bench`.
+bench:   [CommonTarget]?
+
+/// Standard dependency scopes.
+dependencies:         Deps?
+/// Only compiled for `cargo test`/`cargo bench`.
+dev-dependencies:     Deps?
+/// Needed while running *build.rs* scripts only.
+build-dependencies:   Deps?
+
+/// cfg -specific overrides (`cfg(unix)`, `cfg(target_arch = "wasm32")`, …).
+target: Targets?
+
+/// Named feature groups combining flags & optional deps.
+features: FeatureMap?
+
+/// Lint level configuration table (nightly feature).
+lints:   LintMap?
+
+/// CI / build -status badges shown on crates.io.
+badges:  Badge?
+
+/// Registry override patches (used by vendor workflows).
+patch:   Patches?
+
+/// **Deprecated** crate replacement mechanism.
+replace: Deps?
+
+/// Compiler tuning knobs (`dev`, `release`, custom…).
+profile: Profiles?
+
+/// Multi -crate project coordination.
 workspace: Workspace?
-profile: {
-    *: Profile
-}
-*: any
+
+/// Named alternate registries (nightly, needs `cargo login`).
+registries: Registries?
+
+/// Free -form metadata consumed by external tools.
+metadata: AnyMap?
+
+// --------------------------------------------------------------------------- //
+// 🔢 Enumerations                                                             //
+// --------------------------------------------------------------------------- //
+
+/// Rust language editions.
+enum Edition    { "2015", "2018", "2021", "2024" }
+/// Feature -resolver generations.
+enum Resolver   { "1", "2", "3" }
+/// Runtime panic strategy.
+enum PanicKind  { "unwind", "abort" }
+/// Link -Time Optimisation modes.
+enum LtoMode    { "fat", "thin", "off" }
+/// Size -oriented optimisation presets.
+enum OptPreset  { "s", "z" }
+/// Binary stripping options.
+enum Strip      { "symbols", "debuginfo", "none" }
+
+// --------------------------------------------------------------------------- //
+// Package table                                                               //
+// --------------------------------------------------------------------------- //
 
 type Package {
-    name: string
-    version: string
-    edition: Edition
-    description: string
-    authors: [string]?
-    license: string?
-    repository: string?
-    readme: string?
-    keywords: [string]?
-    categories: [string]?
-    homepage: string?
-    documentation: string?
+    /// crates.io name. Must be ASCII, **lowercase**, unique.
+    name:           string
+    /// Semantic version ([SemVer] compliant).
+    version:        string?
+    /// Rust edition.
+    edition:        Edition
+    /// Optional *minimum supported Rust version*.
+    rust-version:   string?
+    /// Short crates.io blurb.
+    description:    string?
+    /// Path to README or `false` to skip.
+    readme:         string? | bool?
+    /// SPDX license expression (`"MIT OR Apache-2.0"`, etc.).
+    license:        string?
+    /// Custom license text file.
+    license-file:   string?
+    homepage:       string?
+    repository:     string?
+    documentation:  string?
+    /// Up to 5 keywords.
+    keywords:       [string]?
+    /// Categories from crates.io’s allow -list.
+    categories:     [string]?
+    /// Default binary for `cargo run`.
+    default-run:    string?
+    /// `false` to forbid publish or list of allowed registries.
+    publish:        bool? | [string]?
+    /// Path to `build.rs`, `true` to auto -detect, `false` to disable.
+    build:          string? | bool?
+    /// Native library name for linking (`-l`).
+    links:          string?
+    include:        [string]?
+    exclude:        [string]?
+    /// Feature -resolver override (2 or 3 recommended).
+    resolver:       Resolver?
+    /// Free -form tool -specific data.
+    metadata:       AnyMap?
 }
 
-type Dependencies {
-    *: string | Dependency
+// --------------------------------------------------------------------------- //
+// Common target fields                                                        //
+// --------------------------------------------------------------------------- //
+
+type CommonTarget {
+    /// Binary / target name.
+    name:               string?
+    /// Custom source path.
+    path:               string?
+    /// Explicit crate types (`rlib`, `cdylib`, …).
+    crate-type:         [string]?
+    /// Compile unit tests.
+    test:               bool?
+    /// Run documentation tests.
+    doctest:            bool?
+    /// Compile benchmarks.
+    bench:              bool?
+    /// Build documentation.
+    doc:                bool?
+    /// Enable/disable test harness.
+    harness:            bool?
+    /// Mark as procedural -macro crate.
+    proc-macro:         bool?
+    /// Features required to build.
+    required-features:  [string]?
+    /// Override edition.
+    edition:            Edition?
 }
 
-enum Edition { "2015", "2018", "2021", "2024" }
+// --------------------------------------------------------------------------- //
+// Dependency specification                                                    //
+// --------------------------------------------------------------------------- //
 
 type Dependency {
-    version: string?
-    path: string?
-    git: string?
-    branch: string?
-    tag: string?
-    package: string?
-    features: [string]?
-    default_features: bool?
-    optional: bool?
+    /// SemVer requirement; ignored if `path` or `git` present.
+    version:           string?
+    /// Named registry key.
+    registry:          string?
+    /// Local path.
+    path:              string?
+    /// Git repository URL.
+    git:               string?
+    branch:            string?
+    tag:               string?
+    rev:               string?
+    /// Crate rename when the upstream name differs.
+    package:           string?
+    default-features:  bool?
+    features:          [string]?
+    optional:          bool?
+    /// Pull version spec from workspace root.
+    workspace:         bool?
+    /// Future -proof bucket.
+    extra:             AnyMap?
 }
 
-type Workspace {
-    members: [string]
-    resolver: Resolver?
-    exclude: [string]?
+/// Map **crate -name → Dependency**
+type Deps { * : Dependency }
+
+/// Per -cfg dependency overrides.
+type TargetSec {
+    /// Normal dependencies.
+    dependencies:         Deps?
+    /// Dev -only dependencies.
+    dev-dependencies:     Deps?
+    /// Build -script dependencies.
+    build-dependencies:   Deps?
 }
 
-enum Resolver { "2", "3" }
+/// Map **cfg -expr → TargetSec**
+type Targets { * : TargetSec }
+
+// --------------------------------------------------------------------------- //
+// Features & Lints                                                            //
+// --------------------------------------------------------------------------- //
+
+/// Map **feature -name → list of flags / dep refs**.
+///
+/// ```toml
+/// [features]
+/// default = ["dep:serde", "serde/derive"]
+/// ```
+/// Enables `serde` crate and its `derive` feature when `default` is requested.
+type FeatureMap { * : [string] }
+
+/// Detailed lint configuration.
+/// Levels: `allow`, `warn`, `deny`, `forbid`.
+type LintDetail {
+    level:    string
+    priority: int?
+}
+
+/// Map **lint -name → LintDetail**
+type LintMap { * : LintDetail }
+
+// --------------------------------------------------------------------------- //
+// Badges & patch                                                              //
+// --------------------------------------------------------------------------- //
+
+type BadgeItem { * : any }   // Service -specific badge payload.
+/// Map **service -name → BadgeItem**
+type Badge { * : BadgeItem }
+
+/// Registry -specific dependency overrides.
+type PatchSec  { * : Deps }
+/// Top -level patch table (`patch.crates-io`, `patch."my-reg"`, …).
+type Patches   { * : PatchSec }
+
+// --------------------------------------------------------------------------- //
+// Profiles                                                                    //
+// --------------------------------------------------------------------------- //
 
 type Profile {
-    opt-level: int
-    lto: string | bool
-    codegen-units: int
-    panic: PanicMode
+    /// Inherit settings from another profile.
+    inherits:         string?
+    /// Optimisation level (0 -3) or size presets `s` / `z`.
+    opt-level:        int? | OptPreset?
+    /// Debug info: `true`, `1`, or detailed string (`line-tables-only`).
+    debug:            bool? | int? | string?
+    /// Platform -specific split debug info (`packed`, `unpacked`).
+    split-debuginfo:  string?
+    /// Strip symbols from final binary.
+    strip:            bool? | Strip?
+    debug_assertions: bool?
+    overflow-checks:  bool?
+    /// Link -Time Optimisation.
+    lto:              bool? | LtoMode?
+    /// Number of parallel codegen units (1 = maximum optimisations).
+    codegen-units:    int?
+    /// Enable incremental compilation.
+    incremental:      bool?
+    /// Abort strategy yields smaller binaries.
+    panic:            PanicKind?
+    /// Embed runtime path in binary (rarely needed).
+    rpath:            bool?
 }
 
-enum PanicMode {
-    "abort"
-    "unwind"
+/// Map **profile -name → Profile**
+type Profiles { * : Profile }
+
+// --------------------------------------------------------------------------- //
+// Workspace & registries                                                      //
+// --------------------------------------------------------------------------- //
+
+type DependencyMap { * : Dependency }
+type LintDetailMap { * : LintDetail }
+
+type Workspace {
+    /// Member crate paths.
+    members:          [string]?
+    /// Exclude matched crates.
+    exclude:          [string]?
+    /// Default subset for bare `cargo build`.
+    default-members:  [string]?
+    /// Feature resolver generation for the whole workspace.
+    resolver:         Resolver?
+    /// Inheritable `[package]` keys.
+    package:          AnyMap?
+    /// Shared dependency versions across crates.
+    dependencies:     DependencyMap?
+    /// Shared lint settings.
+    lints:            LintDetailMap?
+    /// Arbitrary metadata at workspace level.
+    metadata:         AnyMap?
 }
+
+/// Alternate registry definition (requires `cargo login`).
+type Registry   { index: string, token: string? }
+/// Map **registry -name → Registry**
+type Registries { * : Registry }
+
+// --------------------------------------------------------------------------- //
+// Generic open map                                                            //
+// --------------------------------------------------------------------------- //
+
+type AnyMap { * : any }
