@@ -191,7 +191,7 @@ type Dependency {
 }
 
 /// Map **crate -name → Dependency**
-type Deps { * : Dependency }
+type Deps { * : Dependency | string }
 
 /// Per -cfg dependency overrides.
 type TargetSec {
