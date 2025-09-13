@@ -132,6 +132,8 @@ type Package {
     resolver:       Resolver?
     /// Free -form tool -specific data.
     metadata:       AnyMap?
+    /// Project authoers
+    authors: [string]
 }
 
 // --------------------------------------------------------------------------- //
